@@ -137,6 +137,33 @@ def load_mesh_from_memory(glb_bytes: bytes):
     return mesh
 
 
+def build_mesh_figure(vertices, faces, z_norm, title: str, camera_eye: dict):
+    figure = go.Figure(
+        data=[
+            go.Mesh3d(
+                x=vertices[:, 0],
+                y=vertices[:, 1],
+                z=vertices[:, 2],
+                i=faces[:, 0],
+                j=faces[:, 1],
+                k=faces[:, 2],
+                intensity=z_norm,
+                colorscale="Viridis",
+                showscale=False,
+                lighting={"ambient": 0.4, "diffuse": 0.8, "specular": 0.3},
+                lightposition={"x": 100, "y": 200, "z": 300},
+            )
+        ]
+    )
+    figure.update_layout(
+        title=title,
+        scene={"aspectmode": "data", "camera": {"eye": camera_eye}},
+        height=480,
+        margin={"l": 10, "r": 10, "t": 40, "b": 10},
+    )
+    return figure
+
+
 def build_model_component(client: AuthenticatedClient, selected_viatar_id):
     if not selected_viatar_id:
         return html.Div("Select a viatar to load 3D model.", style={"marginTop": "0.75rem", "color": "#666"})
@@ -170,36 +197,37 @@ def build_model_component(client: AuthenticatedClient, selected_viatar_id):
 
         z_norm = (vertices[:, 2] - vertices[:, 2].min()) / (vertices[:, 2].max() - vertices[:, 2].min() + 1e-8)
 
-        figure = go.Figure(
-            data=[
-                go.Mesh3d(
-                    x=vertices[:, 0],
-                    y=vertices[:, 1],
-                    z=vertices[:, 2],
-                    i=faces[:, 0],
-                    j=faces[:, 1],
-                    k=faces[:, 2],
-                    intensity=z_norm,
-                    colorscale="Viridis",
-                    showscale=False,
-                    lighting={"ambient": 0.4, "diffuse": 0.8, "specular": 0.3},
-                    lightposition={"x": 100, "y": 200, "z": 300},
-                )
-            ]
+        figure_primary = build_mesh_figure(
+            vertices,
+            faces,
+            z_norm,
+            title="3D Viewer (Primary)",
+            camera_eye={"x": 1.5, "y": 1.5, "z": 1.5},
         )
-        figure.update_layout(
-            title="3D Viewer",
-            scene={"aspectmode": "data", "camera": {"eye": {"x": 1.5, "y": 1.5, "z": 1.5}}},
-            height=480,
-            margin={"l": 10, "r": 10, "t": 40, "b": 10},
+        figure_secondary = build_mesh_figure(
+            vertices,
+            faces,
+            z_norm,
+            title="3D Viewer (Secondary)",
+            camera_eye={"x": -1.5, "y": 1.5, "z": 1.0},
         )
     except Exception as exc:
         return html.Div(f"Failed to render 3D model: {exc}", style={"marginTop": "0.75rem", "color": "#b00020"})
 
-    return dcc.Graph(
-        figure=figure,
-        config={"displayModeBar": True},
-        style={"marginTop": "0.75rem", "width": "100%"},
+    return html.Div(
+        [
+            dcc.Graph(
+                figure=figure_primary,
+                config={"displayModeBar": True},
+                style={"marginTop": "0.75rem", "width": "100%"},
+            ),
+            dcc.Graph(
+                figure=figure_secondary,
+                config={"displayModeBar": True},
+                style={"marginTop": "0.75rem", "width": "100%"},
+            ),
+        ],
+        style={"width": "100%"},
     )
 
 
