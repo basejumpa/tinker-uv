@@ -24,14 +24,8 @@ This project now exposes a Typer-based CLI.
 
 After installing dependencies/syncing the project, run:
 
-- `tinker-uv --help`
-- `tinker-uv hello`
-- `tinker-uv hello Aman`
-- `tinker-uv version`
+- `tinker-uv`
 
-If you prefer, you can run commands through uv as well:
-
-- `uv run tinker-uv hello`
 
 ## Contribution guide
 
@@ -42,8 +36,7 @@ Contributions are welcome.
 3. Install dependencies with `uv sync`.
 4. Make your changes.
 5. Verify the CLI still works, for example:
-	- `uv run tinker-uv --help`
-	- `uv run tinker-uv hello`
+	- `uv run tinker-uv`
 6. Commit with a clear message and open a pull request.
 
 ### Suggested contribution workflow
