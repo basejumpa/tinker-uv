@@ -1,8 +1,12 @@
 from dash import Dash, html, dcc, Input, Output, State, callback, no_update, dash_table, ctx
+import io
 import json
 import pandas as pd
+import plotly.graph_objects as go
+import trimesh
 from bodyloop_sdk.client.client import Client, AuthenticatedClient
 from bodyloop_sdk.client.api.authentification import login_api_v2_authentification_token_post
+from bodyloop_sdk.client.api.models import get_model_api_v2_viatars_viatar_id_models_model_name_get
 from bodyloop_sdk.client.models.body_login_api_v2_authentification_token_post import BodyLoginApiV2AuthentificationTokenPost
 from bodyloop_sdk.client.api.probands import (
     get_probands_api_v2_probands_get,
@@ -122,6 +126,87 @@ def build_axes_component_from_payload(payload: dict):
     )
 
     return html.Div([axes_table], style={"width": "100%"})
+
+
+def load_mesh_from_memory(glb_bytes: bytes):
+    mesh = trimesh.load(io.BytesIO(glb_bytes), file_type="glb")
+    if isinstance(mesh, trimesh.Scene):
+        meshes = [g for g in mesh.geometry.values() if isinstance(g, trimesh.Trimesh)]
+        if meshes:
+            mesh = trimesh.util.concatenate(meshes)
+    return mesh
+
+
+def build_model_component(client: AuthenticatedClient, selected_viatar_id):
+    if not selected_viatar_id:
+        return html.Div("Select a viatar to load 3D model.", style={"marginTop": "0.75rem", "color": "#666"})
+
+    try:
+        viatar_id = int(selected_viatar_id)
+    except (TypeError, ValueError):
+        return html.Div("Invalid viatar selection for model.", style={"marginTop": "0.75rem", "color": "#b00020"})
+
+    try:
+        model = get_model_api_v2_viatars_viatar_id_models_model_name_get.sync_detailed(
+            client=client,
+            viatar_id=viatar_id,
+            model_name="avatar_3d.glb",
+        ).content
+    except Exception as exc:
+        return html.Div(f"Could not load 3D model: {exc}", style={"marginTop": "0.75rem", "color": "#b00020"})
+
+    if not model:
+        return html.Div("3D model is empty or unavailable.", style={"marginTop": "0.75rem", "color": "#666"})
+
+    try:
+        mesh = load_mesh_from_memory(model)
+        if not isinstance(mesh, trimesh.Trimesh):
+            return html.Div("3D model format could not be interpreted.", style={"marginTop": "0.75rem", "color": "#b00020"})
+
+        vertices = mesh.vertices
+        faces = mesh.faces
+        if len(vertices) == 0 or len(faces) == 0:
+            return html.Div("3D model has no visible geometry.", style={"marginTop": "0.75rem", "color": "#666"})
+
+        z_norm = (vertices[:, 2] - vertices[:, 2].min()) / (vertices[:, 2].max() - vertices[:, 2].min() + 1e-8)
+
+        figure = go.Figure(
+            data=[
+                go.Mesh3d(
+                    x=vertices[:, 0],
+                    y=vertices[:, 1],
+                    z=vertices[:, 2],
+                    i=faces[:, 0],
+                    j=faces[:, 1],
+                    k=faces[:, 2],
+                    intensity=z_norm,
+                    colorscale="Viridis",
+                    showscale=False,
+                    lighting={"ambient": 0.4, "diffuse": 0.8, "specular": 0.3},
+                    lightposition={"x": 100, "y": 200, "z": 300},
+                )
+            ]
+        )
+        figure.update_layout(
+            title="3D Viewer",
+            scene={"aspectmode": "data", "camera": {"eye": {"x": 1.5, "y": 1.5, "z": 1.5}}},
+            height=480,
+            margin={"l": 10, "r": 10, "t": 40, "b": 10},
+        )
+    except Exception as exc:
+        return html.Div(f"Failed to render 3D model: {exc}", style={"marginTop": "0.75rem", "color": "#b00020"})
+
+    return dcc.Graph(
+        figure=figure,
+        config={"displayModeBar": True},
+        style={"marginTop": "0.75rem", "width": "100%"},
+    )
+
+
+def build_viatar_content_component(client: AuthenticatedClient, payload: dict, selected_viatar_id):
+    axes_component = build_axes_component_from_payload(payload)
+    model_component = build_model_component(client, selected_viatar_id)
+    return html.Div([axes_component, model_component], style={"width": "100%"})
 
 
 def build_delta_component(payload_a: dict | None, payload_b: dict | None):
@@ -488,7 +573,7 @@ def load_axes_for_selected_viatars(fetch_a_clicks, fetch_b_clicks, viatar_a_id, 
         if error_a:
             return html.Div(error_a, style={"marginTop": "0.75rem", "color": "#b00020"}), no_update, None, no_update
 
-        return build_axes_component_from_payload(payload_a), no_update, payload_a, no_update
+        return build_viatar_content_component(client, payload_a, viatar_a_id), no_update, payload_a, no_update
 
     if triggered_id == "fetch-b-button":
         if not auth_data:
@@ -509,7 +594,7 @@ def load_axes_for_selected_viatars(fetch_a_clicks, fetch_b_clicks, viatar_a_id, 
         if error_b:
             return no_update, html.Div(error_b, style={"marginTop": "0.75rem", "color": "#b00020"}), no_update, None
 
-        return no_update, build_axes_component_from_payload(payload_b), no_update, payload_b
+        return no_update, build_viatar_content_component(client, payload_b, viatar_b_id), no_update, payload_b
 
     return no_update, no_update, no_update, no_update
 
