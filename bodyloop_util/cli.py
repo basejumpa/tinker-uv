@@ -1,17 +1,17 @@
 import typer
-from .sync import web_app as web_app_sync
-from .compare import web_app as web_app_compare
 
 cli_app = typer.Typer()
 
 @cli_app.command()
 def sync():
     """Syncs probands and results with BodyLoop. Open the web interface to upload an Excel file and sync it with BodyLoop."""
+    from .sync import web_app as web_app_sync
     web_app_sync.run(debug=True, host="0.0.0.0")
     
 @cli_app.command()
 def compare():
     """Compares viatars"""
+    from .compare import web_app as web_app_compare
     web_app_compare.run(debug=True, host="0.0.0.0")
     
 @cli_app.callback(invoke_without_command=True)
