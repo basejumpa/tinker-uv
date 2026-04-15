@@ -1,8 +1,8 @@
 from dash import Dash, html, dcc, Input, Output, State, callback, no_update
+import pandas as pd
 from bodyloop_sdk.client.client import Client, AuthenticatedClient
 from bodyloop_sdk.client.api.authentification import login_api_v2_authentification_token_post
 from bodyloop_sdk.client.models.body_login_api_v2_authentification_token_post import BodyLoginApiV2AuthentificationTokenPost
-
 from bodyloop_sdk.client.api.probands import (
     get_probands_api_v2_probands_get,
 )
@@ -138,4 +138,7 @@ def compare(n_clicks, base_url, username, password):
         timeout=10.0
     )
     
-    return "Comparison functionality is not yet implemented."
+    probands = pd.DataFrame([proband.to_dict() for proband in get_probands_api_v2_probands_get.sync(client=client)])
+    print(probands)
+    
+    return f"Comparison functionality is not yet implemented."
