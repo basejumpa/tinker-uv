@@ -1,4 +1,4 @@
-from dash import Dash, html, dcc, Input, Output, State, callback, no_update, dash_table
+from dash import Dash, html, dcc, Input, Output, State, callback, no_update, dash_table, ctx
 import json
 import pandas as pd
 from bodyloop_sdk.client.client import Client, AuthenticatedClient
@@ -39,7 +39,7 @@ FIELD_INPUT_STYLE = {"width": "16rem"}
 
 BODY_TWO_COLUMN_STYLE = {
     "display": "grid",
-    "gridTemplateColumns": "1fr auto 1fr",
+    "gridTemplateColumns": "1fr 1fr",
     "columnGap": "1.5rem",
     "alignItems": "start",
     "marginTop": "1rem",
@@ -182,37 +182,48 @@ web_app.layout = html.Div(
                 html.Div(
                     [
                         html.Label("Viatar A", style=FIELD_LABEL_STYLE),
-                        dcc.Dropdown(
-                            id="viatar-dropdown-a",
-                            options=[],
-                            value=None,
-                            placeholder="Select a proband to fetch viatars",
-                            style={"width": "28rem"},
+                        html.Div(
+                            [
+                                dcc.Dropdown(
+                                    id="viatar-dropdown-a",
+                                    options=[],
+                                    value=None,
+                                    placeholder="Select a proband to fetch viatars",
+                                    style={"width": "28rem"},
+                                ),
+                                html.Button(
+                                    "Fetch A",
+                                    id="fetch-a-button",
+                                    n_clicks=0,
+                                    style={"minWidth": "7rem"},
+                                ),
+                            ],
+                            style={"display": "flex", "alignItems": "center", "gap": "0.75rem"},
                         ),
                         html.Div(id="axes-a-container"),
                     ],
                     style={"display": "flex", "flexDirection": "column", "alignItems": "flex-start", "gap": "0.75rem"},
                 ),
                 html.Div(
-                    "",
-                    style={
-                        "display": "flex",
-                        "alignItems": "center",
-                        "justifyContent": "center",
-                        "fontSize": "1.25rem",
-                        "color": "#666",
-                        "minWidth": "2rem",
-                    },
-                ),
-                html.Div(
                     [
                         html.Label("Viatar B", style=FIELD_LABEL_STYLE),
-                        dcc.Dropdown(
-                            id="viatar-dropdown-b",
-                            options=[],
-                            value=None,
-                            placeholder="Select a proband to fetch viatars",
-                            style={"width": "28rem"},
+                        html.Div(
+                            [
+                                dcc.Dropdown(
+                                    id="viatar-dropdown-b",
+                                    options=[],
+                                    value=None,
+                                    placeholder="Select a proband to fetch viatars",
+                                    style={"width": "28rem"},
+                                ),
+                                html.Button(
+                                    "Fetch B",
+                                    id="fetch-b-button",
+                                    n_clicks=0,
+                                    style={"minWidth": "7rem"},
+                                ),
+                            ],
+                            style={"display": "flex", "alignItems": "center", "gap": "0.75rem"},
                         ),
                         html.Div(id="axes-b-container"),
                     ],
@@ -374,27 +385,51 @@ def load_viatars_for_proband(selected_proband_id, auth_data):
 @callback(
     Output("axes-a-container", "children"),
     Output("axes-b-container", "children"),
-    Input("viatar-dropdown-a", "value"),
-    Input("viatar-dropdown-b", "value"),
+    Input("fetch-a-button", "n_clicks"),
+    Input("fetch-b-button", "n_clicks"),
+    State("viatar-dropdown-a", "value"),
+    State("viatar-dropdown-b", "value"),
     State("auth-store", "data"),
     prevent_initial_call=True,
 )
-def load_axes_for_selected_viatars(viatar_a_id, viatar_b_id, auth_data):
-    if not auth_data:
-        return html.Div("Load credentials first."), html.Div("Load credentials first.")
+def load_axes_for_selected_viatars(fetch_a_clicks, fetch_b_clicks, viatar_a_id, viatar_b_id, auth_data):
+    if not fetch_a_clicks and not fetch_b_clicks:
+        return no_update, no_update
 
-    base_url = auth_data.get("base_url")
-    api_token = auth_data.get("api_token")
-    if not base_url or not api_token:
-        return html.Div("Load credentials first."), html.Div("Load credentials first.")
+    triggered_id = ctx.triggered_id
 
-    client = AuthenticatedClient(
-        base_url=base_url,
-        verify_ssl=False,
-        token=api_token,
-        timeout=10.0,
-    )
+    if triggered_id == "fetch-a-button":
+        if not auth_data:
+            return html.Div("Load credentials first."), no_update
 
-    axes_a_component = build_axes_component(client, viatar_a_id)
-    axes_b_component = build_axes_component(client, viatar_b_id)
-    return axes_a_component, axes_b_component
+        base_url = auth_data.get("base_url")
+        api_token = auth_data.get("api_token")
+        if not base_url or not api_token:
+            return html.Div("Load credentials first."), no_update
+
+        client = AuthenticatedClient(
+            base_url=base_url,
+            verify_ssl=False,
+            token=api_token,
+            timeout=10.0,
+        )
+        return build_axes_component(client, viatar_a_id), no_update
+
+    if triggered_id == "fetch-b-button":
+        if not auth_data:
+            return no_update, html.Div("Load credentials first.")
+
+        base_url = auth_data.get("base_url")
+        api_token = auth_data.get("api_token")
+        if not base_url or not api_token:
+            return no_update, html.Div("Load credentials first.")
+
+        client = AuthenticatedClient(
+            base_url=base_url,
+            verify_ssl=False,
+            token=api_token,
+            timeout=10.0,
+        )
+        return no_update, build_axes_component(client, viatar_b_id)
+
+    return no_update, no_update
