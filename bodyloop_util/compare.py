@@ -1,5 +1,4 @@
 from dash import Dash, html, dcc, Input, Output, State, callback, no_update
-import pandas as pd
 from bodyloop_sdk.client.client import Client, AuthenticatedClient
 from bodyloop_sdk.client.api.authentification import login_api_v2_authentification_token_post
 from bodyloop_sdk.client.models.body_login_api_v2_authentification_token_post import BodyLoginApiV2AuthentificationTokenPost
@@ -28,6 +27,18 @@ FIELD_GROUP_STYLE = {
 FIELD_LABEL_STYLE = {"marginBottom": "0", "whiteSpace": "nowrap"}
 
 FIELD_INPUT_STYLE = {"width": "16rem"}
+
+
+def format_proband_label(proband) -> str:
+    given = (proband.name_given or "").strip()
+    family = (proband.name_family or "").strip()
+    birthdate = getattr(proband, "date_of_birth", None)
+
+    full_name = f"{given} {family}".strip() or "Unnamed proband"
+    if birthdate:
+        birthdate_text = birthdate.isoformat() if hasattr(birthdate, "isoformat") else str(birthdate)
+        return f"{full_name} ({birthdate_text})"
+    return full_name
 
 web_app.layout = html.Div(
     [
@@ -87,6 +98,19 @@ web_app.layout = html.Div(
             style=FIELD_ROW_STYLE,
         ),
         html.H2("Compare Viatars"),
+        html.Div(
+            [
+                html.Label("Proband", style=FIELD_LABEL_STYLE),
+                dcc.Dropdown(
+                    id="proband-dropdown",
+                    options=[],
+                    value=None,
+                    placeholder="Click Load to fetch probands",
+                    style={"width": "28rem"},
+                ),
+            ],
+            style={"display": "flex", "alignItems": "center", "gap": "0.75rem", "marginTop": "1rem"},
+        ),
         html.Div(id="load-info", style={"marginTop": "1rem"}),
     ],
     style={"padding": "2rem"},
@@ -94,6 +118,8 @@ web_app.layout = html.Div(
 
 @callback(
     Output("load-info", "children"),
+    Output("proband-dropdown", "options"),
+    Output("proband-dropdown", "value"),
     Input("load-button", "n_clicks"),
     State("base-url-input", "value"),
     State("username-input", "value"),
@@ -102,10 +128,10 @@ web_app.layout = html.Div(
 )
 def compare(n_clicks, base_url, username, password):
     if not n_clicks:
-        return no_update
+        return no_update, no_update, no_update
     
     if not base_url or not username or not password:
-        return "Please fill in all fields."
+        return "Please fill in all fields.", [], None
     
    
     try:
@@ -124,12 +150,12 @@ def compare(n_clicks, base_url, username, password):
             )
         )
     except Exception as e:
-        return f"Could not connect to {base_url}. Please check the URL and that BodyLoop is running. {e}"
+        return f"Could not connect to {base_url}. Please check the URL and that BodyLoop is running. {e}", [], None
 
     if response.status_code == 200:
         api_token = response.parsed.access_token
     else:
-        return "Login failed. Please check your credentials and try again."
+        return "Login failed. Please check your credentials and try again.", [], None
 
     client = AuthenticatedClient(
         base_url=base_url,
@@ -138,7 +164,17 @@ def compare(n_clicks, base_url, username, password):
         timeout=10.0
     )
     
-    probands = pd.DataFrame([proband.to_dict() for proband in get_probands_api_v2_probands_get.sync(client=client)])
-    print(probands)
+    probands = get_probands_api_v2_probands_get.sync(client=client) or []
+    options = [
+        {
+            "label": format_proband_label(proband),
+            "value": str(proband.proband_id),
+        }
+        for proband in probands
+    ]
+    options.sort(key=lambda option: option["label"].lower())
+
+    if not options:
+        return "No probands found.", [], None
     
-    return f"Comparison functionality is not yet implemented."
+    return f"Loaded {len(options)} probands.", options, options[0]["value"]
