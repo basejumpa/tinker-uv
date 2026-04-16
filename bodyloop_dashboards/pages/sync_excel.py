@@ -183,8 +183,7 @@ def sync(n_clicks, content_string, base_url, username, password):
     players["sync_status"] = pd.Series(dtype="string")
     players["proband_id"] = pd.Series(dtype="Int64")
     players["viatar_id"] = pd.Series(dtype="Int64")
-    # players["PLAYER_BIRTHDAY"] = pd.Series(dtype="string")
-    players["DATE"] = pd.Series(dtype="string")
+    players["viatar_crtime"] = pd.Series(dtype="string")
 
     # First pass (read-only): Try to find player by PLAYER_ID and key_external
     for player in players.itertuples():
@@ -273,15 +272,13 @@ def sync(n_clicks, content_string, base_url, username, password):
     columns_to_consider = []
     for idx, player in players.iterrows():
         if pd.isna(player.viatar_id):
-            players.at[idx, 'DATE'] = pd.NA
             continue
         
         viatar = get_viatar_api_v2_viatars_viatar_id_get.sync(
             client=client,
             viatar_id=player.viatar_id
         )
-        columns_to_consider.append("DATE")
-        players.at[idx, 'DATE'] = viatar.meta.crtime.strftime("%Y-%m-%d %H:%M:%S")
+        players.at[idx, 'viatar_crtime'] = viatar.meta.crtime.strftime("%Y-%m-%d %H:%M:%S")
         
         heights = get_heights_api_v2_viatars_viatar_id_heights_get.sync(
             client=client,
@@ -322,7 +319,7 @@ def sync(n_clicks, content_string, base_url, username, password):
         except KeyError:
             pass
 
-    columns_to_print = ["PLAYER_ID", "PLAYER_NAME", "PLAYER_BIRTHDAY", "proband_id", "sync_status", "viatar_id"]
+    columns_to_print = ["PLAYER_ID", "PLAYER_NAME", "PLAYER_BIRTHDAY", "proband_id", "sync_status", "viatar_id", "viatar_crtime"]
     columns_to_print.extend(columns_to_consider)
     print(players[columns_to_print])
 
